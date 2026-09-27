@@ -2,6 +2,8 @@
 Embedding service supporting FastEmbed (high-performance ONNX runtime)
 and SentenceTransformers as fallback.
 """
+import os
+from pathlib import Path
 import logging
 from typing import List
 from django.conf import settings
@@ -16,12 +18,26 @@ def get_embedding_model() -> TextEmbedding:
     """
     Returns the singleton embedding model instance.
     Uses FastEmbed for high throughput, ONNX acceleration, and instant startup.
+    Prefers baked-in local model cache to prevent Hugging Face rate limits.
     """
     global _FASTEMBED_INSTANCE
     if _FASTEMBED_INSTANCE is None:
         model_name = getattr(settings, 'EMBEDDING_MODEL', 'BAAI/bge-small-en-v1.5')
         logger.info(f"Initializing FastEmbed model: {model_name}")
-        _FASTEMBED_INSTANCE = TextEmbedding(model_name=model_name)
+
+        # Check for local pre-baked cache directory
+        cache_dir = getattr(settings, 'FASTEMBED_CACHE_DIR', None)
+        if not cache_dir:
+            base_dir = getattr(settings, 'BASE_DIR', Path.cwd())
+            candidate = os.path.join(base_dir, 'fastembed_cache')
+            if os.path.isdir(candidate):
+                cache_dir = candidate
+
+        if cache_dir and os.path.isdir(cache_dir):
+            logger.info(f"Using offline FastEmbed cache directory: {cache_dir}")
+            _FASTEMBED_INSTANCE = TextEmbedding(model_name=model_name, cache_dir=cache_dir)
+        else:
+            _FASTEMBED_INSTANCE = TextEmbedding(model_name=model_name)
     return _FASTEMBED_INSTANCE
 
 
