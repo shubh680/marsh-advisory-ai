@@ -645,15 +645,23 @@
             // Download links
             const dlBtn = document.getElementById('pptx-download-btn');
             const dlBtnBottom = document.getElementById('pptx-download-btn-bottom');
-            dlBtn.href = pitch.pptx_url;
-            dlBtnBottom.href = pitch.pptx_url;
+            if (pitch && pitch.pptx_url) {
+                const pptxFilename = pitch.pptx_url.split('/').pop() || 'marsh_pitch_presentation.pptx';
+                dlBtn.href = pitch.pptx_url;
+                dlBtn.setAttribute('download', pptxFilename);
+                dlBtnBottom.href = pitch.pptx_url;
+                dlBtnBottom.setAttribute('download', pptxFilename);
+            }
 
             const auditBtn = document.getElementById('audit-download-btn');
             const auditBtnBottom = document.getElementById('audit-download-btn-bottom');
             if (audit && audit.report_url) {
+                const reportFilename = audit.report_url.split('/').pop() || 'marsh_audit_report.pdf';
                 auditBtn.href = audit.report_url;
+                auditBtn.setAttribute('download', reportFilename);
                 auditBtn.style.display = 'inline-flex';
                 auditBtnBottom.href = audit.report_url;
+                auditBtnBottom.setAttribute('download', reportFilename);
                 auditBtnBottom.style.display = 'inline-flex';
             } else {
                 auditBtn.style.display = 'none';

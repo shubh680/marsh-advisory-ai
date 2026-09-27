@@ -1,6 +1,7 @@
 import json
+from pathlib import Path
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse, HttpResponseBadRequest, FileResponse, Http404
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
@@ -253,3 +254,24 @@ def delete_document_view(request, document_id):
         'success': True,
         'deleted_document': doc_name,
     })
+
+
+def serve_media_view(request, path):
+    """
+    Safely serves media files (presentations, reports, policies) in production
+    with correct Content-Type, Content-Disposition (as_attachment=True), and directory traversal checks.
+    """
+    safe_path = Path(settings.MEDIA_ROOT).resolve()
+    target_path = (safe_path / path).resolve()
+
+    # Security check: Prevent directory traversal attack outside MEDIA_ROOT
+    if not str(target_path).startswith(str(safe_path)):
+        raise Http404("Access denied.")
+
+    if not target_path.is_file():
+        raise Http404(f"Media file '{path}' not found on server.")
+
+    filename = target_path.name
+    # Force attachment download for PPTX, PDF, and reports so browsers download cleanly
+    as_attachment = target_path.suffix.lower() in ['.pptx', '.pdf', '.html', '.docx', '.xlsx']
+    return FileResponse(open(target_path, 'rb'), as_attachment=as_attachment, filename=filename)
