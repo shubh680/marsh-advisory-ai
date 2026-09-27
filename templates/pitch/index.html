@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marsh Commercial Insurance Advisory & Audit Suite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="brand">
+                <div class="brand-badge">MARSH</div>
+                <div class="brand-text">
+                    <h1>Commercial Insurance Advisory Suite</h1>
+                    <p class="subtitle">AI-powered pitch generation & policy claim verification</p>
+                </div>
+            </div>
+            <div class="phase-tag">
+                <span class="status-dot"></span>
+                <span>System Ready</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- Workspace Setup (Two-Column Layout) -->
+            <form id="pitch-setup-form" onsubmit="event.preventDefault();">
+                {% csrf_token %}
+                <div class="workspace-grid">
+                    <!-- Left Column: Client Targeting & Generation Controls -->
+                    <div class="card setup-control-card">
+                        <div class="card-header">
+                            <h2>🎯 Client Targeting</h2>
+                            <p>Select a client to generate a tailored insurance advisory pitch deck.</p>
+                        </div>
+
+                        <!-- Target Company Input -->
+                        <div class="form-group">
+                            <label for="company-name" class="form-label">
+                                <strong>Company Name</strong>
+                                <span class="help-text">Enter a company name or select from presets</span>
+                            </label>
+                            <div class="input-wrapper">
+                                <span class="input-icon">🏢</span>
+                                <input 
+                                    type="text" 
+                                    id="company-name" 
+                                    name="company_name" 
+                                    class="form-control" 
+                                    placeholder="e.g. Tata Motors, HDFC Bank, Infosys..."
+                                    required
+                                >
+                            </div>
+
+                            <!-- Quick Select Chips -->
+                            <span class="quick-picks-label">Quick Select:</span>
+                            <div class="quick-picks-container">
+                                <button type="button" class="company-chip" onclick="setCompany('Tata Motors')">Tata Motors</button>
+                                <button type="button" class="company-chip" onclick="setCompany('HDFC Bank')">HDFC Bank</button>
+                                <button type="button" class="company-chip" onclick="setCompany('Infosys')">Infosys</button>
+                                <button type="button" class="company-chip" onclick="setCompany('Reliance Industries')">Reliance</button>
+                                <button type="button" class="company-chip" onclick="setCompany('Larsen & Toubro')">L&amp;T</button>
+                            </div>
+                        </div>
+
+                        <!-- Compact Upload Dropzone -->
+                        <div class="form-group">
+                            <label class="form-label">
+                                <strong>Upload Policy Documents</strong>
+                                <span class="help-text">Upload insurance policy PDFs to use as reference</span>
+                            </label>
+                            <div class="upload-dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+                                <input type="file" id="file-input" name="file" accept=".pdf" multiple style="display: none;" onchange="handleFileSelect(event)">
+                                <div class="dropzone-content">
+                                    <div class="upload-icon-circle">📂</div>
+                                    <div class="upload-text">
+                                        <strong>Click to browse or drop PDFs here</strong>
+                                        <p>Supports multiple PDF files</p>
+                                    </div>
+                                </div>
+                                <div id="upload-progress" class="upload-progress" style="display: none; margin-top: 10px;">
+                                    <div class="spinner spinner-dark"></div>
+                                    <span id="upload-progress-text">Processing documents...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Primary Execution Button -->
+                        <button type="button" class="btn-primary-action" id="generate-pitch-btn" onclick="runGenerateAndAuditPipeline()">
+                            <span class="btn-text">🚀 Generate Pitch Deck & Audit Report</span>
+                            <span id="pipeline-spinner" class="spinner" style="display:none;"></span>
+                        </button>
+                        <span class="action-footnote">Researches the client, matches policy benefits, generates a presentation, and audits every claim.</span>
+
+                        <!-- Pipeline Progress Status Box -->
+                        <div id="pipeline-progress" class="upload-progress" style="display: none; margin-top: 16px;">
+                            <div class="spinner spinner-dark"></div>
+                            <span id="pipeline-progress-text">Preparing your report...</span>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Policy Vector Knowledge Base -->
+                    <div class="card policy-knowledge-card">
+                        <div class="card-header">
+                            <div class="table-header-controls">
+                                <div>
+                                    <h2>📚 Uploaded Policies</h2>
+                                    <p>Select which policies to reference when generating the pitch.</p>
+                                </div>
+                                <div class="table-batch-actions">
+                                    <button type="button" class="btn-ghost-sm" onclick="toggleSelectAll(true)">Select All</button>
+                                    <span class="text-muted">•</span>
+                                    <button type="button" class="btn-ghost-sm" onclick="toggleSelectAll(false)">Deselect All</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Document List Table -->
+                        <div class="document-table-container">
+                            <div class="document-table-header">
+                                <span class="col-checkbox"></span>
+                                <span class="col-name">Document</span>
+                                <span class="col-status">Status</span>
+                                <span class="col-actions"></span>
+                            </div>
+                            <div id="documents-list" class="document-table-body">
+                                {% for doc in documents %}
+                                <div class="document-row" id="doc-row-{{ doc.id }}">
+                                    <div class="col-checkbox">
+                                        <input type="checkbox" name="selected_docs" value="{{ doc.document_id }}" id="doc-{{ doc.id }}" checked class="custom-checkbox">
+                                    </div>
+                                    <div class="col-name">
+                                        <label for="doc-{{ doc.id }}" class="doc-title-text">{{ doc.document_name }}</label>
+                                        <div class="doc-meta-sub">
+                                            <span>{{ doc.page_count }} pages</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-status">
+                                        {% if doc.processing_status == 'indexed' %}
+                                            <span class="status-chip success">✓ Ready</span>
+                                        {% elif doc.processing_status == 'processing' %}
+                                            <span class="status-chip warning">Processing...</span>
+                                        {% elif doc.processing_status == 'failed' %}
+                                            <span class="status-chip error" title="{{ doc.error_message }}">Failed</span>
+                                        {% else %}
+                                            <span class="status-chip pending">Pending</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-actions">
+                                        <button type="button" class="btn-delete-doc" title="Remove document" onclick="deleteDocument('{{ doc.document_id }}', this)">🗑️</button>
+                                    </div>
+                                </div>
+                                {% empty %}
+                                <div class="empty-docs-notice" id="empty-notice">
+                                    No documents uploaded yet. Add a policy PDF above to get started.
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            <!-- Tailored Pitch & Independent 4-Tier Audit Dashboard -->
+            <div id="pitch-audit-container" class="card results-dashboard" style="display: none;">
+                <!-- Results Header Bar -->
+                <div class="results-header-bar">
+                    <div class="results-title-group">
+                        <h2 id="pitch-deck-title">Tailored Medical Advisory Pitch Deck</h2>
+                        <p id="pitch-deck-subtitle">Strategic employee healthcare protections and independent 4-tier PDF claim audit.</p>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <a id="pptx-download-btn" href="#" download class="btn-download-pptx">
+                            📥 Download PowerPoint (.pptx)
+                        </a>
+                        <a id="audit-download-btn" href="#" download class="btn-download-audit" style="display: none;">
+                            📄 Download Audit Report (.pdf)
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 4-Tier Audit Scorecard Banner -->
+                <div class="scorecard-banner">
+                    <!-- Radial Gauge Box -->
+                    <div class="scorecard-gauge-box">
+                        <div class="radial-score-ring" id="grounding-score-circle">--%</div>
+                        <div class="scorecard-gauge-meta">
+                            <h4>Claim Verification Score</h4>
+                            <p id="audit-status-badge">Each claim verified against policy documents</p>
+                        </div>
+                    </div>
+
+                    <!-- 4-Tier KPI Metric Grid -->
+                    <div class="kpi-metrics-grid">
+                        <div class="kpi-card supported" title="Fully verified claims">
+                            <div class="kpi-header">🟢 Supported</div>
+                            <div class="kpi-count" id="stat-supported-count">0</div>
+                            <div class="kpi-caption">Fully Verified</div>
+                        </div>
+                        <div class="kpi-card partially" title="Partially verified with conditions">
+                            <div class="kpi-header">🟡 Partial</div>
+                            <div class="kpi-count" id="stat-partially-count">0</div>
+                            <div class="kpi-caption">Conditions Apply</div>
+                        </div>
+                        <div class="kpi-card contradicted" title="Contradicted by policy">
+                            <div class="kpi-header">⛔ Contradicted</div>
+                            <div class="kpi-count" id="stat-contradicted-count">0</div>
+                            <div class="kpi-caption">Policy Conflicts</div>
+                        </div>
+                        <div class="kpi-card unsupported" title="No evidence found in policies">
+                            <div class="kpi-header">🔴 Unsupported</div>
+                            <div class="kpi-count" id="stat-unsupported-count">0</div>
+                            <div class="kpi-caption">Not Found in Policy</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Tabs Switcher -->
+                <div class="results-tabs-nav">
+                    <button type="button" class="results-tab-btn active" id="tab-btn-slides" onclick="switchResultTab('slides')">
+                        📊 Slides & Audit
+                    </button>
+                    <button type="button" class="results-tab-btn" id="tab-btn-profile" onclick="switchResultTab('profile')">
+                        🏢 Client Profile
+                    </button>
+                </div>
+
+                <!-- Tab 1: Slides Deck & Audit Preview -->
+                <div id="tab-pane-slides" class="tab-pane active">
+                    <div class="slides-container" id="slides-deck-area">
+                        <!-- Slides injected dynamically by JS -->
+                    </div>
+                </div>
+
+                <!-- Tab 2: Researched Company Profile -->
+                <div id="tab-pane-profile" class="tab-pane">
+                    <div id="company-profile-card" class="company-profile-card">
+                        <div class="profile-card-header">
+                            <div>
+                                <h3 id="prof-company-name">Company Name</h3>
+                                <span id="prof-industry" class="badge badge-info" style="margin-top: 4px;">Industry</span>
+                            </div>
+                            <span class="badge badge-success">Research Summary</span>
+                        </div>
+                        <div class="profile-grid">
+                            <div class="profile-item">
+                                <span class="prof-label">Company Size &amp; Workforce Scale</span>
+                                <div id="prof-size" class="prof-value font-mono">--</div>
+                            </div>
+                            <div class="profile-item">
+                                <span class="prof-label">Core Commercial Activities</span>
+                                <ul id="prof-activities" class="prof-list"></ul>
+                            </div>
+                            <div class="profile-item full-width">
+                                <span class="prof-label">Operational Footprint (Sites, Plants &amp; Reach)</span>
+                                <ul id="prof-footprint" class="prof-list"></ul>
+                            </div>
+                            <div class="profile-item full-width">
+                                <span class="prof-label">Key Workplace Risks &amp; Medical Exposure Priorities</span>
+                                <ul id="prof-risks" class="prof-list risk-list"></ul>
+                            </div>
+                            <div class="profile-item full-width">
+                                <span class="prof-label">External Evidence &amp; Verified Sources</span>
+                                <div id="prof-sources" class="sources-list font-mono"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Download & Actions Bar -->
+                <div class="download-bar">
+                    <span class="font-mono text-muted" id="audit-summary-note">Claims verified against uploaded policy documents.</span>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <a id="pptx-download-btn-bottom" href="#" download class="btn-download-pptx">
+                            📥 Download Presentation (.pptx)
+                        </a>
+                        <a id="audit-download-btn-bottom" href="#" download class="btn-download-audit" style="display: none;">
+                            📄 Download Audit Report (.pdf)
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Interactive Script -->
+    <script>
+        // Set company input from quick-select chip
+        function setCompany(name) {
+            const input = document.getElementById('company-name');
+            input.value = name;
+            window.currentCompanyProfile = null;
+            input.focus();
+        }
+
+        // Toggle select all / deselect all policy checkboxes
+        function toggleSelectAll(select) {
+            const checkboxes = document.querySelectorAll('input[name="selected_docs"]');
+            checkboxes.forEach(cb => cb.checked = select);
+        }
+
+        // Get CSRF Token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Handle File Upload
+        async function handleFileSelect(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            const progress = document.getElementById('upload-progress');
+            const progressText = document.getElementById('upload-progress-text');
+            progress.style.display = 'flex';
+            progressText.textContent = `Uploading ${files.length} document(s)...`;
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('file', files[i]);
+            }
+
+            try {
+                const response = await fetch('/api/upload/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (data.success && data.documents) {
+                    refreshDocumentsList();
+                } else if (data.errors && data.errors.length > 0) {
+                    alert('Upload error: ' + JSON.stringify(data.errors));
+                }
+            } catch (err) {
+                alert('Upload request failed: ' + err.message);
+            } finally {
+                progress.style.display = 'none';
+                document.getElementById('file-input').value = '';
+            }
+        }
+
+        // Drag & drop handlers
+        const dropzone = document.getElementById('dropzone');
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropzone.classList.add('drag-over');
+            }, false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('drag-over');
+            }, false);
+        });
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files && files.length > 0) {
+                document.getElementById('file-input').files = files;
+                handleFileSelect({ target: { files: files } });
+            }
+        });
+
+        // Refresh documents list
+        async function refreshDocumentsList() {
+            try {
+                const res = await fetch('/api/documents/');
+                const data = await res.json();
+                const container = document.getElementById('documents-list');
+                
+                if (!data.documents || data.documents.length === 0) {
+                    container.innerHTML = '<div class="empty-docs-notice">No documents uploaded yet. Add a policy PDF above to get started.</div>';
+                    return;
+                }
+
+                container.innerHTML = data.documents.map(doc => `
+                    <div class="document-row" id="doc-row-${doc.id}">
+                        <div class="col-checkbox">
+                            <input type="checkbox" name="selected_docs" value="${doc.document_id}" id="doc-${doc.id}" checked class="custom-checkbox">
+                        </div>
+                        <div class="col-name">
+                            <label for="doc-${doc.id}" class="doc-title-text">${doc.document_name}</label>
+                            <div class="doc-meta-sub">
+                                <span>${doc.page_count} pages</span>
+                            </div>
+                        </div>
+                        <div class="col-status">
+                            ${doc.processing_status === 'indexed' ? '<span class="status-chip success">✓ Ready</span>' : 
+                              doc.processing_status === 'processing' ? '<span class="status-chip warning">Processing...</span>' : 
+                              doc.processing_status === 'failed' ? '<span class="status-chip error">Failed</span>' : 
+                              '<span class="status-chip pending">Pending</span>'}
+                        </div>
+                        <div class="col-actions">
+                            <button type="button" class="btn-delete-doc" title="Remove document" onclick="deleteDocument('${doc.document_id}', this)">🗑️</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error("Failed to refresh documents list", err);
+            }
+        }
+
+        // Delete a document (Qdrant chunks + DB record + PDF file)
+        async function deleteDocument(documentId, btnEl) {
+            if (!confirm('Remove this document?')) return;
+            const row = btnEl.closest('.document-row');
+            btnEl.disabled = true;
+            btnEl.textContent = '⏳';
+            try {
+                const res = await fetch(`/api/documents/${documentId}/delete/`, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (row) row.remove();
+                    // Show empty notice if no docs left
+                    const remaining = document.querySelectorAll('.document-row');
+                    if (remaining.length === 0) {
+                        document.getElementById('documents-list').innerHTML =
+                            '<div class="empty-docs-notice">No documents uploaded yet. Add a policy PDF above to get started.</div>';
+                    }
+                } else {
+                    alert('Delete failed: ' + (data.error || 'Unknown error'));
+                    btnEl.disabled = false;
+                    btnEl.textContent = '🗑️';
+                }
+            } catch (err) {
+                alert('Delete request failed: ' + err.message);
+                btnEl.disabled = false;
+                btnEl.textContent = '🗑️';
+            }
+        }
+
+        // Switch Results Tabs (Slides vs Corporate Profile)
+        function switchResultTab(tabName) {
+            const btnSlides = document.getElementById('tab-btn-slides');
+            const btnProfile = document.getElementById('tab-btn-profile');
+            const paneSlides = document.getElementById('tab-pane-slides');
+            const paneProfile = document.getElementById('tab-pane-profile');
+
+            if (tabName === 'slides') {
+                btnSlides.classList.add('active');
+                btnProfile.classList.remove('active');
+                paneSlides.classList.add('active');
+                paneProfile.classList.remove('active');
+            } else {
+                btnProfile.classList.add('active');
+                btnSlides.classList.remove('active');
+                paneProfile.classList.add('active');
+                paneSlides.classList.remove('active');
+            }
+        }
+
+        // Render Researched Corporate Profile inside Tab 2
+        function renderCompanyProfile(profile, companyName) {
+            if (!profile) return;
+            document.getElementById('prof-company-name').textContent = profile.company_name || companyName;
+
+            // Industry
+            const industryEl = document.getElementById('prof-industry');
+            const ind = profile.industry_sector || profile.industry;
+            if (typeof ind === 'object' && ind && ind.assumption) {
+                industryEl.innerHTML = `Assumption: ${ind.reason}`;
+                industryEl.className = 'badge badge-warning';
+            } else {
+                industryEl.textContent = ind || 'Corporate Commercial';
+                industryEl.className = 'badge badge-info';
+            }
+
+            // Size
+            const sizeEl = document.getElementById('prof-size');
+            if (typeof profile.company_size === 'object' && profile.company_size && profile.company_size.assumption) {
+                sizeEl.innerHTML = `<span class="badge badge-warning">Assumption: ${profile.company_size.reason}</span>`;
+            } else {
+                sizeEl.textContent = profile.company_size || 'Enterprise Scale';
+            }
+
+            // Activities
+            const activitiesEl = document.getElementById('prof-activities');
+            const acts = Array.isArray(profile.business_activities) ? profile.business_activities : [];
+            activitiesEl.innerHTML = acts.map(act => `<li>${act}</li>`).join('') || '<li>General commercial operations</li>';
+
+            // Operational Footprint
+            const footprintEl = document.getElementById('prof-footprint');
+            const foot = Array.isArray(profile.operational_footprint) ? profile.operational_footprint : [];
+            if (typeof profile.operational_footprint === 'object' && profile.operational_footprint && profile.operational_footprint.assumption) {
+                footprintEl.innerHTML = `<li><span class="badge badge-warning">Assumption: ${profile.operational_footprint.reason}</span></li>`;
+            } else {
+                footprintEl.innerHTML = foot.map(f => `<li>🌐 ${f}</li>`).join('') || '<li>National and regional operations</li>';
+            }
+
+            // Risks
+            const risksEl = document.getElementById('prof-risks');
+            const risks = Array.isArray(profile.key_risks_and_exposures) ? profile.key_risks_and_exposures : (Array.isArray(profile.key_risks) ? profile.key_risks : []);
+            if (typeof profile.key_risks_and_exposures === 'object' && profile.key_risks_and_exposures && profile.key_risks_and_exposures.assumption) {
+                risksEl.innerHTML = `<li><span class="badge badge-warning">Assumption: ${profile.key_risks_and_exposures.reason}</span></li>`;
+            } else {
+                risksEl.innerHTML = risks.map(risk => `<li>⚠️ ${risk}</li>`).join('') || '<li>Standard operational healthcare exposures</li>';
+            }
+
+            // Sources (Title + URL)
+            const sourcesEl = document.getElementById('prof-sources');
+            const srcs = Array.isArray(profile.sources) ? profile.sources : [];
+            sourcesEl.innerHTML = srcs.map(s => {
+                const title = typeof s === 'object' && s.title ? s.title : (typeof s === 'string' ? s.split('/').pop().replace(/_/g, ' ') : 'Verified Source');
+                const url = typeof s === 'object' && s.url ? s.url : (typeof s === 'string' ? s : '#');
+                return `<a href="${url}" target="_blank" class="source-link" title="${url}">🔗 ${title}</a>`;
+            }).join(' ') || '<span>External Web Synthesis</span>';
+        }
+
+        // Run End-to-End Pipeline: Research → Workforce Health → Qdrant RAG → PPTX Pitch → 4-Tier PDF Audit
+        async function runGenerateAndAuditPipeline() {
+            const companyInput = document.getElementById('company-name');
+            const companyName = companyInput.value.trim();
+            if (!companyName) {
+                alert('Please enter a company name.');
+                companyInput.focus();
+                return;
+            }
+
+            // Check if any policy documents are loaded
+            const allDocRows = document.querySelectorAll('.document-row');
+            if (allDocRows.length === 0) {
+                alert('Please upload at least one policy document before generating.');
+                return;
+            }
+
+            // Get selected document IDs
+            const checkboxes = document.querySelectorAll('input[name="selected_docs"]:checked');
+            const selectedDocIds = Array.from(checkboxes).map(cb => cb.value);
+            if (selectedDocIds.length === 0) {
+                alert('Please select at least one policy document.');
+                return;
+            }
+
+            // If the company name being requested does not match the cached profile's name, reset the cache
+            if (window.currentCompanyProfile) {
+                const cachedName = (window.currentCompanyProfile.company_name || '').trim().toLowerCase();
+                const newName = companyName.trim().toLowerCase();
+                if (!cachedName || (!newName.includes(cachedName) && !cachedName.includes(newName))) {
+                    window.currentCompanyProfile = null;
+                }
+            }
+
+            const btn = document.getElementById('generate-pitch-btn');
+            const spinner = document.getElementById('pipeline-spinner');
+            const progress = document.getElementById('pipeline-progress');
+            const progressText = document.getElementById('pipeline-progress-text');
+            const container = document.getElementById('pitch-audit-container');
+
+            // Hide stale previous results so they are not displayed while new search runs
+            container.style.display = 'none';
+
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            progress.style.display = 'flex';
+            progressText.textContent = 'Step 1/3: Researching company profile...';
+
+            try {
+                let stepTimer1 = setTimeout(() => {
+                    progressText.textContent = 'Step 2/3: Building presentation deck...';
+                }, 3000);
+
+                let stepTimer2 = setTimeout(() => {
+                    progressText.textContent = 'Step 3/3: Auditing claims against policy documents...';
+                }, 7500);
+
+                const response = await fetch('/api/generate-and-audit/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        company_name: companyName,
+                        selected_docs: selectedDocIds,
+                        company_profile: window.currentCompanyProfile || null
+                    })
+                });
+
+                clearTimeout(stepTimer1);
+                clearTimeout(stepTimer2);
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    alert('Pipeline error: ' + (data.error || 'Unknown error'));
+                    return;
+                }
+
+                if (data.company_profile) {
+                    window.currentCompanyProfile = data.company_profile;
+                }
+
+                // Render Dashboard
+                renderPitchAndAuditDashboard(data);
+                container.style.display = 'block';
+                container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            } catch (err) {
+                alert('Pipeline request failed: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+                progress.style.display = 'none';
+            }
+        }
+
+        // Render Pitch and 4-Tier Audit Dashboard
+        function renderPitchAndAuditDashboard(data) {
+            const pitch = data.pitch;
+            const audit = data.audit;
+
+            // Titles
+            document.getElementById('pitch-deck-title').textContent = pitch.presentation_title || `Tailored Pitch: ${data.company_name}`;
+            document.getElementById('pitch-deck-subtitle').textContent = pitch.presentation_subtitle || 'Commercial employee health advisory deck with grounded claim verification.';
+
+            // Reset tab and populate company profile
+            switchResultTab('slides');
+            if (data.company_profile) {
+                renderCompanyProfile(data.company_profile, data.company_name);
+            }
+
+            // Download links
+            const dlBtn = document.getElementById('pptx-download-btn');
+            const dlBtnBottom = document.getElementById('pptx-download-btn-bottom');
+            dlBtn.href = pitch.pptx_url;
+            dlBtnBottom.href = pitch.pptx_url;
+
+            const auditBtn = document.getElementById('audit-download-btn');
+            const auditBtnBottom = document.getElementById('audit-download-btn-bottom');
+            if (audit && audit.report_url) {
+                auditBtn.href = audit.report_url;
+                auditBtn.style.display = 'inline-flex';
+                auditBtnBottom.href = audit.report_url;
+                auditBtnBottom.style.display = 'inline-flex';
+            } else {
+                auditBtn.style.display = 'none';
+                auditBtnBottom.style.display = 'none';
+            }
+
+            // Scorecard
+            const scoreCircle = document.getElementById('grounding-score-circle');
+            const statusBadge = document.getElementById('audit-status-badge');
+            const score = audit.grounding_score || 0;
+            scoreCircle.textContent = `${score}%`;
+
+            if (!audit.total_claims || audit.total_claims === 0) {
+                scoreCircle.textContent = '0%';
+                scoreCircle.style.borderColor = '#64748b';
+                statusBadge.innerHTML = '⚪ <strong style="color:#94a3b8;">NO CLAIMS DETECTED</strong> — No verifiable claims found in the presentation.';
+            } else if (score >= 80 && audit.audit_status === 'PASSED') {
+                scoreCircle.style.borderColor = '#10b981';
+                statusBadge.innerHTML = '🟢 <strong style="color:#6ee7b7;">AUDIT PASSED</strong> — All claims verified against policy documents.';
+            } else if (score >= 60) {
+                scoreCircle.style.borderColor = '#f59e0b';
+                statusBadge.innerHTML = '🟡 <strong style="color:#fde68a;">REVIEW RECOMMENDED</strong> — Some claims have conditions or limitations.';
+            } else {
+                scoreCircle.style.borderColor = '#ef4444';
+                statusBadge.innerHTML = '🔴 <strong style="color:#fca5a5;">ACTION REQUIRED</strong> — Some claims could not be verified.';
+            }
+
+            document.getElementById('stat-supported-count').textContent = audit.supported_count || 0;
+            document.getElementById('stat-partially-count').textContent = audit.partially_supported_count || 0;
+            document.getElementById('stat-unsupported-count').textContent = audit.unsupported_count || 0;
+            document.getElementById('stat-contradicted-count').textContent = audit.contradicted_count || 0;
+
+            // Render Slides Deck
+            const slidesArea = document.getElementById('slides-deck-area');
+            const slides = pitch.slides || [];
+            const auditedClaims = audit.audited_claims || [];
+
+            slidesArea.innerHTML = slides.map(slide => {
+                const slideNum = slide.slide_number;
+                const bullets = slide.bullets || [];
+                // Get all claims audited for this slide
+                const slideAuditResults = auditedClaims.filter(ac => ac.slide_number === slideNum);
+                const slideClaims = (slide.policy_claims && slide.policy_claims.length > 0) ? slide.policy_claims : [];
+                
+                // Use audited claims as source of truth for full transparency
+                const displayClaims = slideAuditResults.length > 0 ? slideAuditResults : slideClaims;
+
+                const claimsHtml = displayClaims.length > 0 ? `
+                    <div class="slide-claims-box">
+                        <div class="slide-claims-header">🛡️ Policy Claim Verification</div>
+                        ${displayClaims.map((item, cIdx) => {
+                            const claimText = item.claim_text || '';
+                            const auditItem = item.verdict ? item : (slideAuditResults.find(a => a.claim_text === claimText) || slideAuditResults[cIdx] || item);
+                            const verdict = (auditItem.verdict || auditItem.audit_verdict || 'UNSUPPORTED').toLowerCase();
+                            const verdictClass = `verdict-${verdict}`;
+                            const verdictLabel = verdict === 'supported' ? '🟢 Supported' :
+                                                 verdict === 'partially_supported' ? '🟡 Partially Supported' :
+                                                 verdict === 'contradicted' ? '⛔ Contradicted' : '🔴 Unsupported';
+
+                            const citedPolicy = auditItem.cited_policy || item.cited_policy || 'Policy Document';
+                            const citedPage = auditItem.cited_page || item.cited_page || 1;
+                            const evidenceQuote = auditItem.evidence_quote || auditItem.audit_quote || '';
+                            const explanation = auditItem.explanation || auditItem.audit_explanation || '';
+                            
+                            const hasValidQuote = evidenceQuote && 
+                                                  !evidenceQuote.toLowerCase().includes('no verified quotation') &&
+                                                  !evidenceQuote.toLowerCase().includes('not mentioned in policy') &&
+                                                  !evidenceQuote.toLowerCase().includes('no corresponding text');
+
+                            let drawerHtml = '';
+                            if (hasValidQuote) {
+                                drawerHtml = `
+                                    <div class="claim-evidence-drawer drawer-${verdict}">
+                                        <strong>Policy Evidence:</strong> "${evidenceQuote}"
+                                        ${explanation ? `<div class="claim-explanation">🔍 ${explanation}</div>` : ''}
+                                    </div>
+                                `;
+                            } else if (verdict === 'unsupported') {
+                                drawerHtml = `
+                                    <div class="claim-evidence-drawer drawer-unsupported">
+                                        <strong style="color: #f87171;">Audit Finding:</strong> Claim assertion not substantiated in policy text
+                                        <div class="claim-explanation">⚠️ ${explanation || 'No matching policy clause or benefit terms could be verified for this claim.'}</div>
+                                    </div>
+                                `;
+                            } else if (verdict === 'contradicted') {
+                                drawerHtml = `
+                                    <div class="claim-evidence-drawer drawer-contradicted">
+                                        <strong style="color: #ef4444;">Policy Conflict:</strong> Contradicts policy terms or exclusions
+                                        <div class="claim-explanation">⛔ ${explanation || 'Policy text explicitly excludes or contradicts this claim.'}</div>
+                                    </div>
+                                `;
+                            } else if (explanation) {
+                                drawerHtml = `
+                                    <div class="claim-evidence-drawer drawer-${verdict}">
+                                        <strong>Audit Finding:</strong>
+                                        <div class="claim-explanation">🔍 ${explanation}</div>
+                                    </div>
+                                `;
+                            }
+
+                            return `
+                                <div class="claim-audit-row claim-row-${verdict}">
+                                    <div class="claim-top-row">
+                                        <span class="claim-text">"${claimText}"</span>
+                                        <span class="verdict-badge ${verdictClass}">${verdictLabel}</span>
+                                    </div>
+                                    <div class="claim-source-tag">
+                                        📄 ${citedPolicy} — Page ${citedPage}
+                                    </div>
+                                    ${drawerHtml}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                ` : '';
+
+                return `
+                    <div class="slide-preview-card">
+                        <div class="slide-card-header">
+                            <div>
+                                <h3>Slide ${slideNum}: ${slide.title}</h3>
+                                ${slide.subtitle ? `<div class="slide-card-subtitle">${slide.subtitle}</div>` : ''}
+                            </div>
+                            <span class="slide-number-badge">Slide ${slideNum} of ${slides.length}</span>
+                        </div>
+                        <ul class="slide-bullets-list">
+                            ${bullets.map(b => `<li>${b}</li>`).join('')}
+                        </ul>
+                        ${claimsHtml}
+                    </div>
+                `;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
